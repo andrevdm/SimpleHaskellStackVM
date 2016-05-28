@@ -2,7 +2,7 @@
 
 ## About the Project
 
-This is a small demonstration project showing how a simple byte code interpreting stack machine (virtual machine) can be built with Haskell. It is not a complete VM nor of any particular practical use but is rather a simple demonstration of how a stack machine can be built.
+This is a small demonstration project showing how a simple byte code interpreting stack machine (virtual machine) can be built with Haskell. It is not a production VM nor of any particular practical use but is rather a simple demonstration of how a stack machine can be built.
 
 I built this for mainly as a project for learning Haskell, i.e. something a little bigger to work on. So NB this is probably not idiomatic Haskell, and may have some newbie mistakes. Hopefully it is interesting enough despite this... 
 
@@ -12,21 +12,21 @@ I built this for mainly as a project for learning Haskell, i.e. something a litt
 
 Stack machines are simpler to implement than [register machines](https://en.wikipedia.org/wiki/Register_machine) but are still practical even for production VMs.
 
-### Building the VM with Haskell
+### Writing the VM in Haskell
 
-Virtual machines are typically written in a low level language like C for maximum efficiency. They also are typically written using mutable data structures. Here I'm using Haskell and pure functional data structures. I have absolutely no performance goals, so there are no constrains I need to worry about.
+Virtual machines are typically written in a low level language like C for maximum efficiency. They also are typically written using mutable data structures. Here I'm using Haskell and pure functional data structures. I have absolutely no performance goals, so there are no constraints I need to worry about.
 
 A few design decisions
 
-1. I'm using a Data.Sequence rather than a list. While I'm not concerned about performance using a linked list to do random access is still a terrible idea
+1. I'm using a Data.Sequence rather than a list. While I'm not concerned about performance using a linked list to do random access is still a bad idea
 
 2. Try to avoid bottom (⊥), so use "safe" versions whenever ⊥ could otherwise be returned (toEnum, index, head etc)
 
 3. I'm using [Stephen Diehl's Protolude \[2\]](https://github.com/sdiehl/protolude) and removing the default prelude 
 
-Using the immutable data structures like Data.Sequence worked out quite nicely and means that as the VM runs you can keep a full history of the VM's state. So you have everything (apart from time) you need to build a nice visualiser / 'time travelling' debugger.
+Using the immutable data structures like Data.Sequence had worked out nicely and means that as the VM runs you can keep a full history of the VM's state. So you have everything (apart from time) you need to build a nice visualiser / 'time travelling' debugger.
 
-## Building the VM
+## The VM
 
 ### Opcodes & byte code
 
@@ -90,12 +90,13 @@ This is fairly minimal but it’s more than enough for a simple VM like this.
 Some things to note
 * The stack (cpuStack) is part of the CPU. This makes sense for a stack machine since a stack is core to everything it does. It also means that as the CPU runs you get a full history of each stack state along with the CPU flags at the time each opcode was run
 * There is no need for a stack pointer since the stack is a 'dynamically' growing Data.Sequence. I.e. sp always points to the head of cpuStack.
-* The instruction pointer (ip) points to the next instruction to run. Unlike the stack the byte stream is not part of the CPU. In this implementation the byte stream is fixed (no self-modifying code), so there is no need to copy it on each CPU operation
-* The frame pointer (fp) is discussed below in the section about function calls
+* The instruction pointer (ip) points to the next instruction to run. 
+* In this implementation the byte stream is fixed (no self-modifying code), so there is no need to copy it on each CPU operation
+* The frame pointer (fp) is discussed below in the section about function calls (Call & Ret)
 
 ### The byte code assembler
 
-Rather than writing the byte code with hex editor a very simple assembler is used. Later on additional assemblers and compliers can be layer on top of this low level assembler which does little more than convert opcode mnemonics to byte code.
+Rather than writing the byte code in hex a very simple assembler is used. Later on additional assemblers and compliers can be layer on top of this low level assembler which does little more than convert opcode mnemonics to byte code.
 
 An operation can take parameters from the byte code stream. For instance a ***push*** instruction takes a parameter that is the value to push onto the stack. The type that represents this is the inventively named ***OpAndParam***
 
@@ -136,7 +137,7 @@ instrByOp :: Map.Map Operation Instruction
 instrByOp = Map.fromList $ map (\i -> (opCode i, i)) instructions
 ```
 
-The assembler then does nothing more than converting the opcode enum to a byte (and Int in the code but it will be serialised as a byte) checking the number of parameters for each opcode. It is small enough to be pasted in full here
+The assembler then does nothing more than converting the opcode enum to a byte (an Int in the code but it would be serialised as a byte) checking the number of parameters for each opcode. It is small enough to be pasted in full here
 
 ```haskell
 -- | A single assembler error
@@ -243,7 +244,7 @@ The Jmp instruction causes the CPU to set the instruction pointer (ip) to 3. In 
 
 ##### Branching (Beq, Bne, Blr, Blte, Bgt, Bgte)
 
-Branching is a conditional jump. The top two values are popped off the stack compared and based on the type of conditional branch operator.  
+Branching is a conditional jump. The top two values are popped off the stack compared based on the type of conditional operator.  
 
 In the following example the values 1 and to are pushed. ***Bgt*** is executed and if 2 is greater than 1 then the CPU jumps to location 7. If no then it continues executing at the location after the branch (6)
 
@@ -274,12 +275,12 @@ push 2   +--------+    Bgt +--------+
 This is what the history of the CPU would look like for the above example
 
 ```haskell
-Cpu {ip = -1, cpuStack =    [], cpuGlobals = [], ranOp = 0,  state = "",     panic = False}
-Cpu {ip =  1, cpuStack =   [1], cpuGlobals = [], ranOp = 3,  state = "Push", panic = False}
-Cpu {ip =  3, cpuStack = [2,1], cpuGlobals = [], ranOp = 3,  state = "Push", panic = False}
-Cpu {ip =  5, cpuStack =    [], cpuGlobals = [], ranOp = 12, state = "Bgt",  panic = False}
-Cpu {ip =  6, cpuStack =    [], cpuGlobals = [], ranOp = 0,  state = "Nop",  panic = False}
-Cpu {ip =  7, cpuStack =    [], cpuGlobals = [], ranOp = 2,  state = "Halt", panic = True}
+Cpu {ip = -1, cpuStack =    [], ranOp = 0,  state = "",     panic = False}
+Cpu {ip =  1, cpuStack =   [1], ranOp = 3,  state = "Push", panic = False}
+Cpu {ip =  3, cpuStack = [2,1], ranOp = 3,  state = "Push", panic = False}
+Cpu {ip =  5, cpuStack =    [], ranOp = 12, state = "Bgt",  panic = False}
+Cpu {ip =  6, cpuStack =    [], ranOp = 0,  state = "Nop",  panic = False}
+Cpu {ip =  7, cpuStack =    [], ranOp = 2,  state = "Halt", panic = True}
 ```
 
 ##### Call & Ret
@@ -295,9 +296,9 @@ As a trivial example consider a the case when there are no parameters
 04: 11    -- Ret
 ```
 
-The CPU does this
-* When it executes the ***call*** operation it pushes the return address onto the stack, i.e. the next instruction after the ***call***. Here its the  ***halt*** at 02.
-* The ip is set to 03 and the CPU executes the ***nop***
+The CPU does the following
+* Executes the ***call*** operation and pushes the return address onto the stack, i.e. the next instruction after the ***call***. Here it is the  ***halt*** at 02.
+* The ip is set to 03, the offset of the function, and the CPU executes the function (***nop***)
 * The ***ret*** operation gets the return address (02) from the stack and updates the ip
 * The ***halt*** at 02 is executed.
 
@@ -365,7 +366,7 @@ __ 0c: 06    -- Add
 ```
 
 * Then when a ***ret*** operation is executed the CPU needs to do the reverse.
-* The return value is poped, and the stack shifted back to the fp
+* The return value is popped, and the stack shifted back to the fp
 * Notice that the original parameters are still on the stack. This is normal for the cdecl calling convention. The caller is responsible for cleaning up.
 
 ```text
@@ -513,9 +514,9 @@ interpretByteCode :: S.Seq Int -> [Cpu]
 
 ```
 
-Finally the core interpret code can be called. Since the params, pops are now stored as lists and all checks performed this code is quite simple.
+Finally the core interpreter code can be called. Since the params, pops are now stored as lists and all checks performed this code is quite simple.
 
-* Remember that there are two types of ***Instructions***; simple and complex. Simple instructions are fully defined by the ***Instruction***
+* Remember that in this VM there are two types of ***Instructions***; simple and complex. Simple instructions are fully defined by the ***Instruction***. Complex instructions have full control over the CPU
 * Simple instructions are given an empty CPU and return a CPU with the values that need to be changed. For example simple instructions can not pop extra values or change the fp
 * Complex instructions are not fully defined by the ***Instruction*** and can change the CPU in any way they need to.
 
@@ -629,3 +630,4 @@ This explanation of the stack machine is significantly longer than the code for 
 
 ## See also
 - https://www.youtube.com/watch?v=OjaAToVkoTw
+
