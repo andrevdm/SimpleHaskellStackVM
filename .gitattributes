@@ -1,0 +1,8 @@
+*md        text
+*.md       text 
+*.sh       text
+*.markdown text
+.gitattributes text
+.gitignore     text
+
+* text=auto
